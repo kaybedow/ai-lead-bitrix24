@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI-обробка заявок для Bitrix24 – демо</title>
+<meta name="description" content="Заявка з сайту проходить через AI, стає готовим лідом у Bitrix24, а менеджер отримує повідомлення в Telegram. Демо інтеграції.">
+<meta name="robots" content="noindex">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%23172B4D'/%3E%3Cpath d='M6 12h4l2-5 2 10 2-5h2' stroke='%2338BDF8' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#F4F6FA; --card:#fff; --ink:#172B4D; --muted:#5E6C84; --line:#DFE3EB;
+    --accent:#0EA5E9; --accent-dark:#0369A1; --ok:#16A34A; --warn:#D97706; --bad:#DC2626;
+    --code:#0F172A; --radius:12px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+  h1,h2,h3{margin:0;line-height:1.2}
+  a{color:var(--accent-dark)}
+  :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 20px}
+
+  header{background:var(--ink);color:#fff;padding:28px 0 30px}
+  header h1{font-size:clamp(1.5rem,3vw,2.1rem);font-weight:800}
+  header p{color:#B6C2D6;margin:10px 0 0;max-width:70ch}
+  .flow{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px;padding:0;list-style:none}
+  .flow li{background:#24395E;border-radius:999px;padding:6px 14px;font-size:.9rem;font-weight:600}
+  .flow li+li::before{content:"→";margin-right:8px;color:var(--accent)}
+  .flow li+li{display:flex;align-items:center}
+
+  main{padding:28px 0 60px}
+  .grid{display:grid;grid-template-columns:380px 1fr;gap:24px;align-items:start}
+  @media (max-width:900px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:22px}
+  .card h2{font-size:1.15rem;margin-bottom:4px}
+  .hint{color:var(--muted);font-size:.9rem;margin:0 0 16px}
+
+  /* Форма */
+  .presets{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+  .presets button{font:inherit;font-size:.85rem;border:1px solid var(--line);background:var(--bg);border-radius:999px;padding:5px 12px;cursor:pointer}
+  .presets button:hover{border-color:var(--accent)}
+  form{display:grid;gap:12px}
+  label{display:grid;gap:5px;font-weight:600;font-size:.92rem}
+  input,textarea{font:inherit;padding:11px 12px;border:1.5px solid var(--line);border-radius:8px;width:100%;min-width:0;background:#fff;color:var(--ink)}
+  textarea{min-height:120px;resize:vertical}
+  input:focus,textarea:focus{border-color:var(--accent);outline:none}
+  .hp{position:absolute;left:-9999px}
+  .btn{font:700 1rem/1 system-ui,sans-serif;background:var(--accent);color:#fff;border:0;border-radius:8px;padding:14px;cursor:pointer}
+  .btn:hover{background:var(--accent-dark)}
+  .btn:disabled{opacity:.6;cursor:wait}
+  .mode{font-size:.82rem;color:var(--muted);margin:4px 0 0}
+
+  /* Кроки */
+  .steps{display:grid;gap:12px}
+  .step{border:1px solid var(--line);border-radius:10px;background:var(--card);overflow:hidden;opacity:.45;transition:opacity .3s}
+  .step.on{opacity:1}
+  .step.active{border-color:var(--accent);box-shadow:0 0 0 3px rgba(14,165,233,.15)}
+  .step-h{display:flex;align-items:center;gap:12px;padding:12px 16px}
+  .num{flex:none;width:28px;height:28px;border-radius:50%;background:var(--bg);display:grid;place-items:center;font-weight:800;font-size:.9rem}
+  .step.done .num{background:var(--ok);color:#fff}
+  .step.active .num{background:var(--accent);color:#fff}
+  .step-h b{display:block}
+  .step-h small{color:var(--muted)}
+  .step-h .st{margin-left:auto;font-size:.82rem;font-weight:700;color:var(--muted);white-space:nowrap}
+  .step.done .st{color:var(--ok)}
+  pre{margin:0;background:var(--code);color:#E2E8F0;font:12.5px/1.55 ui-monospace,Menlo,Consolas,monospace;padding:14px 16px;overflow:auto;max-height:240px;white-space:pre-wrap;word-break:break-word}
+  pre:empty{display:none}
+  .k{color:#7DD3FC}.s{color:#FDE68A}.n{color:#86EFAC}
+
+  /* Telegram */
+  .tg{background:#E7EEF5;padding:14px 16px}
+  .tg:empty{display:none}
+  .bubble{background:#fff;border-radius:12px 12px 12px 4px;padding:10px 14px;max-width:420px;font-size:.92rem;box-shadow:0 1px 1px rgba(0,0,0,.08)}
+  .bubble .bot{color:var(--accent-dark);font-weight:700;font-size:.82rem;margin-bottom:4px}
+  .bubble time{display:block;text-align:right;color:var(--muted);font-size:.75rem;margin-top:4px}
+
+  /* CRM */
+  .crm{margin-top:24px}
+  .crm-h{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+  .stats{display:flex;gap:16px;color:var(--muted);font-size:.9rem}
+  .stats b{color:var(--ink)}
+  table{width:100%;border-collapse:collapse;font-size:.92rem}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-size:.8rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.03em}
+  .tag{display:inline-block;border-radius:6px;padding:2px 8px;font-size:.8rem;font-weight:700;white-space:nowrap}
+  .p-high{background:#FEE2E2;color:var(--bad)}
+  .p-mid{background:#FEF3C7;color:var(--warn)}
+  .p-low{background:#E0F2FE;color:var(--accent-dark)}
+  .p-spam{background:#F1F5F9;color:var(--muted);text-decoration:line-through}
+  .empty td{color:var(--muted);text-align:center;padding:24px}
+  @media (max-width:640px){
+    thead{display:none}
+    table,tbody,tr,td{display:block}
+    tr{border:1px solid var(--line);border-radius:10px;margin-bottom:10px;padding:6px 0}
+    td{border:0;padding:4px 14px;display:flex;gap:10px}
+    td::before{content:attr(data-l);flex:none;width:90px;color:var(--muted);font-size:.82rem;font-weight:700}
+    .empty td::before{display:none}
+  }
+
+  .why{margin-top:24px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .why div{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px}
+  .why b{display:block;margin-bottom:4px}
+  .why p{margin:0;color:var(--muted);font-size:.92rem}
+  @media (max-width:760px){.why{grid-template-columns:1fr}}
+
+  footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);font-size:.9rem}
+  footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px 30px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <h1>Заявка з сайту стає готовим лідом у Bitrix24</h1>
+    <p>AI читає текст заявки, визначає тип і пріоритет, витягує суму та зручний час дзвінка. Лід з'являється в CRM уже заповненим, спам туди не потрапляє, повторні звернення не створюють дублів, а менеджер одразу отримує повідомлення в Telegram.</p>
+    <ul class="flow" aria-label="Як проходить заявка">
+      <li>Форма на сайті</li><li>AI (LLM API)</li><li>Bitrix24 REST</li><li>Telegram</li>
+    </ul>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <div class="grid">
+
+      <section class="card" aria-labelledby="formTitle">
+        <h2 id="formTitle">Сайт: форма заявки</h2>
+        <p class="hint">Напишіть як клієнт або візьміть приклад.</p>
+        <div class="presets" id="presets"></div>
+        <form id="form">
+          <label>Ім'я<input name="name" id="name" autocomplete="off" required></label>
+          <label>Телефон<input name="phone" id="phone" inputmode="tel" autocomplete="off" required></label>
+          <label>Повідомлення<textarea name="message" id="message" required></textarea></label>
+          <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+          <button class="btn" id="send" type="submit">Надіслати заявку</button>
+          <p class="mode" id="mode"></p>
+        </form>
+      </section>
+
+      <section aria-labelledby="pipeTitle">
+        <h2 id="pipeTitle" class="sr" style="font-size:1.15rem;margin-bottom:12px">Що відбувається після натискання</h2>
+        <div class="steps">
+          <div class="step" id="s1">
+            <div class="step-h"><span class="num">1</span><div><b>Сервер отримав заявку</b><small>webhook.php, перевірка та захист від ботів</small></div><span class="st"></span></div>
+            <pre></pre>
+          </div>
+          <div class="step" id="s2">
+            <div class="step-h"><span class="num">2</span><div><b>AI розібрав текст</b><small>LLM повертає JSON за схемою</small></div><span class="st"></span></div>
+            <pre></pre>
+          </div>
+          <div class="step" id="s3">
+            <div class="step-h"><span class="num">3</span><div><b>Лід у Bitrix24</b><small>REST API: перевірка дубля, потім новий лід або коментар</small></div><span class="st"></span></div>
+            <pre></pre>
+          </div>
+          <div class="step" id="s4">
+            <div class="step-h"><span class="num">4</span><div><b>Менеджер отримав повідомлення</b><small>Telegram Bot API</small></div><span class="st"></span></div>
+            <div class="tg"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <section class="card crm" aria-labelledby="crmTitle">
+      <div class="crm-h">
+        <h2 id="crmTitle">CRM: ліди після обробки</h2>
+        <div class="stats"><span>Лідів: <b id="cLeads">0</b></span><span>Без дублів: <b id="cRep">0</b></span><span>Відсіяно спаму: <b id="cSpam">0</b></span></div>
+      </div>
+      <table>
+        <thead><tr><th>Пріоритет</th><th>Тип</th><th>Клієнт</th><th>Сума</th><th>Дзвонити</th><th>Резюме для менеджера</th></tr></thead>
+        <tbody id="rows"><tr class="empty"><td colspan="6">Поки порожньо. Надішліть заявку з форми вище.</td></tr></tbody>
+      </table>
+    </section>
+
+    <div class="why">
+      <div><b>Менеджер не читає кожну заявку</b><p>Тип, сума та час дзвінка вже в полях ліда, гарячі заявки видно одразу.</p></div>
+      <div><b>Спам не засмічує CRM</b><p>Реклама, SEO-пропозиції та беззмістовні повідомлення відсіюються до Bitrix24.</p></div>
+      <div><b>Без дублів у CRM</b><p>Якщо клієнт пише вдруге, нова заявка додається коментарем до його ліда, а не створює ще один.</p></div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Демо інтеграції. Код вебхука на PHP лежить у <a href="https://github.com/kaybedow/ai-lead-bitrix24">репозиторії на GitHub</a>.</span>
+    <span>Кирило Кайбедов, <a href="https://t.me/+380969350501">Telegram</a></span>
+  </div>
+</footer>
+
+<script>
+(function(){
+  'use strict';
+  // адреса webhook.php; порожньо = демо, AI моделюється правилами в браузері
+  var API_URL = '';
+
+  var presets = [
+    {label:'Кредит на авто', name:'Олег', phone:'+380 67 123 45 67', message:'Добрий день, хочу взяти кредит 200 тисяч на машину, треба терміново. Передзвоніть, будь ласка, після 18:00.'},
+    {label:'Страховка', name:'Марина', phone:'+380 50 765 43 21', message:'Підкажіть ціну КАСКО на Toyota RAV4 2021 року. Можна ввечері або завтра зранку.'},
+    {label:'Консультація', name:'Андрій', phone:'+380 93 222 11 00', message:'Хотів би дізнатися умови рефінансування, у мене вже є кредит в іншому банку. Не горить.'},
+    {label:'Олег пише знову', name:'Олег', phone:'+380 67 123 45 67', message:'Це знову я, щодо кредиту на авто. Можна і завтра зранку, сума та сама.'},
+    {label:'Спам', name:'SEO Pro', phone:'+380 99 000 00 00', message:'Просування вашого сайту в ТОП Google за 7 днів! Гарантія результату, пишіть https://seo-top.example'}
+  ];
+  var pBox = document.getElementById('presets');
+  presets.forEach(function(p){
+    var b = document.createElement('button');
+    b.type = 'button'; b.textContent = p.label;
+    b.addEventListener('click', function(){
+      ['name','phone','message'].forEach(function(k){ document.getElementById(k).value = p[k]; });
+    });
+    pBox.appendChild(b);
+  });
+  document.getElementById('mode').textContent = API_URL
+    ? 'Режим: реальний сервер.'
+    : 'Демо-режим: відповідь AI змодельована в браузері, ключі API не потрібні.';
+
+  // замість LLM у демо прості правила
+  function mockAI(t){
+    var s = t.toLowerCase();
+    var type = 'Консультація', cat = 'consult';
+    if (/https?:|seo|просуван|крипт|заробі|топ google|реклам/.test(s)) { type = 'Спам'; cat = 'spam'; }
+    else if (/каско|осаго|страх|поліс|автоцивілк/.test(s)) { type = /каско/.test(s) ? 'Страхування КАСКО' : /осаго|автоцивілк/.test(s) ? 'Автоцивілка' : 'Страхування'; cat = 'insurance'; }
+    else if (/кредит|позик|розстрочк|гроші|рефінанс/.test(s)) { type = /рефінанс/.test(s) ? 'Рефінансування' : 'Кредит'; cat = 'credit'; }
+    if (cat === 'credit' && /машин|авто/.test(s)) type = 'Кредит на авто';
+
+    var amount = null, m = s.match(/(\d[\d\s]*)\s*(тис|тисяч|k|000)/);
+    if (m) amount = parseInt(m[1].replace(/\s/g, ''), 10) * (m[2] === '000' ? 1 : 1000);
+    var call = 'будь-коли';
+    var tm = s.match(/після\s*(\d{1,2})(?::(\d{2}))?/);
+    if (tm) call = 'після ' + tm[1] + ':' + (tm[2] || '00');
+    else if (/ввечері/.test(s)) call = 'ввечері';
+    else if (/зранку|вранці/.test(s)) call = 'зранку';
+
+    var urgent = /терміново|срочно|сьогодні|швидко/.test(s);
+    var priority = cat === 'spam' ? 'spam' : urgent ? 'high' : /не горить|не терміново/.test(s) ? 'low' : 'mid';
+    var summary = cat === 'spam' ? 'Рекламна розсилка, не клієнт.'
+      : type + (amount ? ' на ' + amount.toLocaleString('uk-UA') + ' грн' : '') + (urgent ? ', терміново' : '') + (call !== 'будь-коли' ? ', дзвонити ' + call : '') + '.';
+    return {is_spam: cat === 'spam', category: cat, type: type, priority: priority, amount_uah: amount, call_time: call, summary: summary};
+  }
+
+  var PR = {high:['Високий','p-high'], mid:['Середній','p-mid'], low:['Низький','p-low'], spam:['Спам','p-spam']};
+  function esc(v){ return String(v).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function json(o){
+    return esc(JSON.stringify(o, null, 2))
+      .replace(/(&quot;[^&]*?&quot;)(\s*:)/g, '<span class="k">$1</span>$2')
+      .replace(/:\s(&quot;.*?&quot;)/g, ': <span class="s">$1</span>')
+      .replace(/:\s(-?\d+|true|false|null)/g, ': <span class="n">$1</span>');
+  }
+  function step(n, state, label){
+    var el = document.getElementById('s' + n);
+    el.classList.toggle('on', state !== 'idle');
+    el.classList.toggle('active', state === 'active');
+    el.classList.toggle('done', state === 'done' || state === 'skip');
+    el.querySelector('.st').textContent = label || '';
+    return el;
+  }
+  function wait(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+  var leads = 0, spam = 0, repeats = 0, leadId = 1040, byPhone = {};
+
+  function addRow(lead, ai){
+    var rows = document.getElementById('rows');
+    var empty = rows.querySelector('.empty'); if (empty) empty.remove();
+    var p = PR[ai.priority];
+    var tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td data-l="Пріоритет"><span class="tag ' + p[1] + '">' + p[0] + '</span></td>' +
+      '<td data-l="Тип"><span>' + esc(ai.type) + (lead.repeat ? '<br><small>повторне, лід #' + lead.repeat + '</small>' : '') + '</span></td>' +
+      '<td data-l="Клієнт"><span>' + esc(lead.name) + '<br><small>' + esc(lead.phone) + '</small></span></td>' +
+      '<td data-l="Сума">' + (ai.amount_uah ? ai.amount_uah.toLocaleString('uk-UA') + ' грн' : '–') + '</td>' +
+      '<td data-l="Дзвонити">' + esc(ai.call_time) + '</td>' +
+      '<td data-l="Резюме"><span>' + esc(ai.summary) + (ai.is_spam ? ' <small>(не потрапив у CRM)</small>' : '') + '</span></td>';
+    rows.prepend(tr);
+    document.getElementById('cLeads').textContent = leads;
+    document.getElementById('cSpam').textContent = spam;
+    document.getElementById('cRep').textContent = repeats;
+  }
+
+  var form = document.getElementById('form'), btn = document.getElementById('send');
+  form.addEventListener('submit', async function(e){
+    e.preventDefault();
+    if (form.website.value) return; // honeypot
+    var lead = {name: form.name.value.trim(), phone: form.phone.value.trim(), message: form.message.value.trim()};
+    if (!lead.name || !lead.phone || lead.message.length < 5) { form.reportValidity(); return; }
+    btn.disabled = true;
+    [1,2,3,4].forEach(function(n){ var el = step(n, 'idle'); var pre = el.querySelector('pre'); if (pre) pre.innerHTML = ''; });
+    document.querySelector('#s4 .tg').innerHTML = '';
+
+    var ai, res;
+    if (API_URL) {
+      try {
+        var r = await fetch(API_URL, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(lead)});
+        res = await r.json(); ai = res.ai;
+      } catch(err) { alert('Сервер недоступний: ' + err.message); btn.disabled = false; return; }
+    } else {
+      ai = mockAI(lead.message);
+    }
+
+    var s1 = step(1, 'active', 'обробка…');
+    s1.querySelector('pre').innerHTML = 'POST /webhook.php\n' + json({name: lead.name, phone: lead.phone, message: lead.message, source: 'site_form'});
+    await wait(500); step(1, 'done', '200 OK');
+
+    var s2 = step(2, 'active', 'AI думає…');
+    await wait(900);
+    s2.querySelector('pre').innerHTML = json(ai);
+    step(2, 'done', ai.is_spam ? 'спам' : 'готово');
+
+    var s3 = step(3, 'active', 'запит…');
+    await wait(500);
+    if (ai.is_spam) {
+      s3.querySelector('pre').innerHTML = '<span class="s">// Спам: лід не створюємо, лише пишемо в лог</span>';
+      step(3, 'skip', 'пропущено');
+      step(4, 'skip', 'не потрібно');
+      spam++;
+    } else {
+      var key = lead.phone.replace(/\D/g, '');
+      var known = res ? (res.repeat ? res.lead_id : null) : byPhone[key];
+      var pre3 = s3.querySelector('pre');
+      var url = 'https://ваш-портал.bitrix24.ua/rest/1/****/';
+      var find = 'POST ' + url + 'crm.duplicate.findbycomm.json\n' + json({type: 'PHONE', values: [lead.phone], entity_type: 'LEAD'});
+      if (known) {
+        lead.repeat = known; leadId = known; repeats++;
+        pre3.innerHTML = find + '\n// Знайдено лід #' + known + ', новий не створюємо\n\nPOST ' + url + 'crm.timeline.comment.add.json\n' +
+          json({fields: {ENTITY_ID: known, ENTITY_TYPE: 'lead', COMMENT: 'Повторне звернення. ' + ai.summary}});
+        step(3, 'done', 'повторне, #' + known);
+      } else {
+        leadId = res && res.lead_id ? res.lead_id : leadId + 1;
+        byPhone[key] = leadId;
+        var fields = {
+          TITLE: ai.type + ': ' + lead.name,
+          NAME: lead.name,
+          PHONE: [{VALUE: lead.phone, VALUE_TYPE: 'WORK'}],
+          SOURCE_ID: 'WEB',
+          OPPORTUNITY: ai.amount_uah || 0,
+          CURRENCY_ID: 'UAH',
+          COMMENTS: ai.summary + ' Дзвонити: ' + ai.call_time + '. Клієнт написав: ' + lead.message,
+          ASSIGNED_BY_ID: ai.category === 'insurance' ? 7 : 5
+        };
+        pre3.innerHTML = find + '\n// Дублів немає\n\nPOST ' + url + 'crm.lead.add.json\n' +
+          json({fields: fields}) + '\n\n// Відповідь Bitrix24\n' + json({result: leadId});
+        step(3, 'done', 'лід #' + leadId);
+      }
+
+      step(4, 'active', 'надсилання…');
+      await wait(450);
+      var fire = ai.priority === 'high' ? '🔥 ' : '';
+      var now = new Date().toLocaleTimeString('uk-UA', {hour:'2-digit', minute:'2-digit'});
+      document.querySelector('#s4 .tg').innerHTML = '<div class="bubble"><div class="bot">Ліди Bot</div>' +
+        (lead.repeat ? '🔁 Повторне звернення<br>' : '') + fire + '<b>' + esc(ai.type) + '</b>, ' + PR[ai.priority][0].toLowerCase() + ' пріоритет<br>' +
+        esc(lead.name) + ', ' + esc(lead.phone) + '<br>' + esc(ai.summary) + '<br>Лід #' + leadId + ' у Bitrix24<time>' + now + '</time></div>';
+      step(4, 'done', 'доставлено');
+      if (!lead.repeat) leads++;
+    }
+    addRow(lead, ai);
+    btn.disabled = false;
+  });
+})();
+</script>
+</body>
+</html>
