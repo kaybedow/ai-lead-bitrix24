@@ -49,6 +49,8 @@
   .btn:hover{background:var(--accent-dark)}
   .btn:disabled{opacity:.6;cursor:wait}
   .mode{font-size:.82rem;color:var(--muted);margin:4px 0 0}
+  .err{color:var(--bad);font-size:.82rem;font-weight:500;min-height:1em}
+  input.invalid{border-color:var(--bad)}
 
   /* Кроки */
   .steps{display:grid;gap:12px}
@@ -88,6 +90,7 @@
   .p-low{background:#E0F2FE;color:var(--accent-dark)}
   .p-spam{background:#F1F5F9;color:var(--muted);text-decoration:line-through}
   .empty td{color:var(--muted);text-align:center;padding:24px}
+  td small{white-space:nowrap}
   @media (max-width:640px){
     thead{display:none}
     table,tbody,tr,td{display:block}
@@ -129,7 +132,7 @@
         <div class="presets" id="presets"></div>
         <form id="form">
           <label>Ім'я<input name="name" id="name" autocomplete="off" required></label>
-          <label>Телефон<input name="phone" id="phone" inputmode="tel" autocomplete="off" required></label>
+          <label>Телефон<input name="phone" id="phone" type="tel" inputmode="tel" autocomplete="off" maxlength="17" placeholder="+380 __ ___ __ __" required><span class="err" id="phoneErr"></span></label>
           <label>Повідомлення<textarea name="message" id="message" required></textarea></label>
           <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
           <button class="btn" id="send" type="submit">Надіслати заявку</button>
@@ -205,6 +208,7 @@
     b.type = 'button'; b.textContent = p.label;
     b.addEventListener('click', function(){
       ['name','phone','message'].forEach(function(k){ document.getElementById(k).value = p[k]; });
+      setPhoneErr('');
     });
     pBox.appendChild(b);
   });
@@ -278,12 +282,36 @@
     document.getElementById('cRep').textContent = repeats;
   }
 
+
+  // маска телефону +380 XX XXX XX XX: лише цифри, не більше 9 після коду країни
+  var phoneEl = document.getElementById('phone'), phoneErr = document.getElementById('phoneErr');
+  function phoneDigits(v){
+    var d = v.replace(/\D/g, '');
+    if (d.indexOf('380') === 0) d = d.slice(3);
+    else if (d.indexOf('80') === 0) d = d.slice(2);
+    return d.replace(/^0+/, '').slice(0, 9);
+  }
+  function phoneMask(d){
+    var out = '+380';
+    if (d.length) out += ' ' + d.slice(0, 2);
+    if (d.length > 2) out += ' ' + d.slice(2, 5);
+    if (d.length > 5) out += ' ' + d.slice(5, 7);
+    if (d.length > 7) out += ' ' + d.slice(7, 9);
+    return out;
+  }
+  function setPhoneErr(msg){ phoneErr.textContent = msg; phoneEl.classList.toggle('invalid', !!msg); }
+  phoneEl.addEventListener('focus', function(){ if (!phoneEl.value) phoneEl.value = '+380 '; });
+  phoneEl.addEventListener('input', function(){ phoneEl.value = phoneMask(phoneDigits(phoneEl.value)); if (phoneDigits(phoneEl.value).length === 9) setPhoneErr(''); });
+  phoneEl.addEventListener('blur', function(){ if (!phoneDigits(phoneEl.value).length) phoneEl.value = ''; });
+
   var form = document.getElementById('form'), btn = document.getElementById('send');
   form.addEventListener('submit', async function(e){
     e.preventDefault();
     if (form.website.value) return; // honeypot
     var lead = {name: form.name.value.trim(), phone: form.phone.value.trim(), message: form.message.value.trim()};
-    if (!lead.name || !lead.phone || lead.message.length < 5) { form.reportValidity(); return; }
+    if (phoneDigits(lead.phone).length !== 9) { setPhoneErr('Введіть номер повністю: +380 XX XXX XX XX'); phoneEl.focus(); return; }
+    setPhoneErr('');
+    if (!lead.name || lead.message.length < 5) { form.reportValidity(); return; }
     btn.disabled = true;
     [1,2,3,4].forEach(function(n){ var el = step(n, 'idle'); var pre = el.querySelector('pre'); if (pre) pre.innerHTML = ''; });
     document.querySelector('#s4 .tg').innerHTML = '';
