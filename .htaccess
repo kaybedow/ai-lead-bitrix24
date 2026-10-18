@@ -1,5 +1,5 @@
-# config.php та логи не віддаємо назовні
-<FilesMatch "^(config\.php|config\.example\.php|.*\.log)$">
+# конфіг
+<FilesMatch "^(config\.php|config\.example\.php|lib\.php|retry\.php|.*\.log|.*\.jsonl)$">
     Require all denied
 </FilesMatch>
 Options -Indexes
