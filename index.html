@@ -138,7 +138,7 @@
       </section>
 
       <section aria-labelledby="pipeTitle">
-        <h2 id="pipeTitle" class="sr" style="font-size:1.15rem;margin-bottom:12px">Що відбувається після натискання</h2>
+        <h2 id="pipeTitle" style="font-size:1.15rem;margin-bottom:12px">Що відбувається після натискання</h2>
         <div class="steps">
           <div class="step" id="s1">
             <div class="step-h"><span class="num">1</span><div><b>Сервер отримав заявку</b><small>webhook.php, перевірка та захист від ботів</small></div><span class="st"></span></div>
@@ -232,7 +232,12 @@
     var urgent = /терміново|срочно|сьогодні|швидко/.test(s);
     var priority = cat === 'spam' ? 'spam' : urgent ? 'high' : /не горить|не терміново/.test(s) ? 'low' : 'mid';
     var summary = cat === 'spam' ? 'Рекламна розсилка, не клієнт.'
-      : type + (amount ? ' на ' + amount.toLocaleString('uk-UA') + ' грн' : '') + (urgent ? ', терміново' : '') + (call !== 'будь-коли' ? ', дзвонити ' + call : '') + '.';
+      : [type + (amount ? ' на ' + amount.toLocaleString('uk-UA') + ' грн' : ''),
+         /вже є кредит|є кредит/.test(s) ? 'вже має кредит в іншому банку' : '',
+         /ціну|вартість|скільки/.test(s) ? 'питає ціну' : '',
+         /toyota|bmw|audi|vw|mercedes|skoda|renault|kia|hyundai/i.test(t) ? 'авто ' + (t.match(/(toyota|bmw|audi|vw|mercedes|skoda|renault|kia|hyundai)[^,.]*/i) || [''])[0].trim() : '',
+         urgent ? 'терміново' : priority === 'low' ? 'без поспіху' : '',
+         call !== 'будь-коли' ? 'дзвонити ' + call : ''].filter(Boolean).join(', ') + '.';
     return {is_spam: cat === 'spam', category: cat, type: type, priority: priority, amount_uah: amount, call_time: call, summary: summary};
   }
 
@@ -288,6 +293,8 @@
       try {
         var r = await fetch(API_URL, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(lead)});
         res = await r.json(); ai = res.ai;
+        // з 'async' => true сервер відповідає одразу, без розбору AI, показувати нічого
+        if (!ai) { alert(res.error || 'Заявку прийнято. Для показу кроків на сервері потрібно \'async\' => false.'); btn.disabled = false; return; }
       } catch(err) { alert('Сервер недоступний: ' + err.message); btn.disabled = false; return; }
     } else {
       ai = mockAI(lead.message);
@@ -310,11 +317,27 @@
       step(4, 'skip', 'не потрібно');
       spam++;
     } else {
+      // та сама нормалізація, що і на сервері: 067... і +38067... це один клієнт
       var key = lead.phone.replace(/\D/g, '');
+      if (key.length === 10 && key[0] === '0') key = '38' + key;
       var known = res ? (res.repeat ? res.lead_id : null) : byPhone[key];
       var pre3 = s3.querySelector('pre');
       var url = 'https://ваш-портал.bitrix24.ua/rest/1/****/';
       var find = 'POST ' + url + 'crm.duplicate.findbycomm.json\n' + json({type: 'PHONE', values: [lead.phone], entity_type: 'LEAD'});
+      if (res && res.queued) {
+        // Bitrix24 недоступний: сервер поставив заявку в чергу, номера ліда ще немає
+        pre3.innerHTML = find + '\n<span class="s">// Bitrix24 недоступний: заявка в черзі, retry.php дошле її пізніше</span>';
+        step(3, 'done', 'у черзі');
+        step(4, 'active', 'надсилання…');
+        await wait(450);
+        document.querySelector('#s4 .tg').innerHTML = '<div class="bubble"><div class="bot">Ліди Bot</div>⚠️ Bitrix24 недоступний, лід створиться пізніше автоматично<br><b>' +
+          esc(ai.type) + '</b>, ' + PR[ai.priority][0].toLowerCase() + ' пріоритет<br>' + esc(lead.name) + ', ' + esc(lead.phone) + '<br>' + esc(ai.summary) +
+          '<time>' + new Date().toLocaleTimeString('uk-UA', {hour:'2-digit', minute:'2-digit'}) + '</time></div>';
+        step(4, 'done', 'доставлено');
+        addRow(lead, ai);
+        btn.disabled = false;
+        return;
+      }
       if (known) {
         lead.repeat = known; leadId = known; repeats++;
         pre3.innerHTML = find + '\n// Знайдено лід #' + known + ', новий не створюємо\n\nPOST ' + url + 'crm.timeline.comment.add.json\n' +
@@ -326,12 +349,12 @@
         var fields = {
           TITLE: ai.type + ': ' + lead.name,
           NAME: lead.name,
-          PHONE: [{VALUE: lead.phone, VALUE_TYPE: 'WORK'}],
+          PHONE: [{VALUE: lead.phone, VALUE_TYPE: 'MOBILE'}],
           SOURCE_ID: 'WEB',
           OPPORTUNITY: ai.amount_uah || 0,
           CURRENCY_ID: 'UAH',
           COMMENTS: ai.summary + ' Дзвонити: ' + ai.call_time + '. Клієнт написав: ' + lead.message,
-          ASSIGNED_BY_ID: ai.category === 'insurance' ? 7 : 5
+          ASSIGNED_BY_ID: {credit: 5, insurance: 7, consult: 5}[ai.category] || 1
         };
         pre3.innerHTML = find + '\n// Дублів немає\n\nPOST ' + url + 'crm.lead.add.json\n' +
           json({fields: fields}) + '\n\n// Відповідь Bitrix24\n' + json({result: leadId});
